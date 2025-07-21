@@ -1,40 +1,39 @@
 const express = require('express');
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
+const cheerio = require('cheerio');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/download', async (req, res) => {
-    const fileUrl = req.query.url;
-    if (!fileUrl) {
+app.get('/extract-and-download', async (req, res) => {
+    const pageUrl = req.query.url;
+    if (!pageUrl) {
         return res.status(400).json({ error: 'Missing url parameter' });
     }
 
     try {
-        const filename = path.basename(fileUrl.split('?')[0]) || 'downloaded_file';
+        // 1. Scrape Mediafire page
+        const response = await axios.get(pageUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        const $ = cheerio.load(response.data);
+        const directLink = $('a#downloadButton').attr('href');
 
-        const response = await axios({
-            method: 'GET',
-            url: fileUrl,
+        if (!directLink) {
+            return res.status(404).json({ error: 'Download link not found' });
+        }
+
+        // 2. Stream file directly to client
+        const fileResponse = await axios.get(directLink, {
             responseType: 'stream',
             headers: { 'User-Agent': 'Mozilla/5.0' }
         });
 
-        const filePath = path.join(__dirname, filename);
-        const writer = fs.createWriteStream(filePath);
-        response.data.pipe(writer);
+        const fileName = directLink.split('/').pop() || 'download.file';
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.setHeader('Content-Type', fileResponse.headers['content-type'] || 'application/octet-stream');
 
-        writer.on('finish', () => {
-            res.download(filePath, filename, () => {
-                fs.unlinkSync(filePath);
-            });
-        });
-        writer.on('error', () => {
-            res.status(500).json({ error: 'File download failed' });
-        });
-
+        fileResponse.data.pipe(res);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
