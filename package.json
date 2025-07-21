@@ -1,0 +1,13 @@
+{
+  "name": "mediafire-downloader",
+  "version": "1.0.0",
+  "description": "Simple Mediafire file downloader via direct link",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "express": "^4.19.2"
+  }
+}
